@@ -7,7 +7,7 @@ import os
 import tempfile
 import threading
 import time
-from classifier.inference import FAQInference
+from classifier.inference import FAQCatBoostInference
 from classifier.inference import model_config, id_to_label_maps
 
 def run_application():
@@ -37,7 +37,7 @@ class MainApplication:
     def __init__(self):
         self.queue = Queue()
         self.cache = {}
-        self.inference = FAQInference(model_config, id_to_label_maps)
+        self.inference = FAQCatBoostInference(model_config, id_to_label_maps)
 
     def start(self):
         while True:
@@ -80,6 +80,7 @@ def request_hint():
     task = Task("index_in_db", get_hint_wrapper, {
                                                               "question": question})
     application.add_task(task)
+    return jsonify({"task_id": task.task_id}), 200
 
 @app.route('/task_status', methods=['POST'])
 def task_status():
