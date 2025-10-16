@@ -2,6 +2,8 @@ import torch
 from transformers import AutoTokenizer, AutoModel
 from classifier.bert_classifier import BERTClassifier, BertTokenizer
 from catboost import CatBoostClassifier
+import scibox_api
+import nlp_entry
 
 id_to_label_maps = {
     'Основная категория': {0: 'Новые клиенты', 1: 'Продукты - Вклады', 2: 'Продукты - Карты', 3: 'Продукты - Кредиты', 4: 'Техническая поддержка', 5: 'Частные клиенты'},
@@ -51,9 +53,10 @@ class FAQCatBoostInference:
         print(f"Используемое устройство для BERT: {self.device}")
 
         # 1. Загрузка BERT модели и токенизатора для создания эмбеддингов
-        self.tokenizer = AutoTokenizer.from_pretrained(bert_model_name)
-        self.bert_model = AutoModel.from_pretrained(bert_model_name).to(self.device)
-        self.bert_model.eval()
+        ##self.tokenizer = AutoTokenizer.from_pretrained(bert_model_name)
+        ##self.bert_model = AutoModel.from_pretrained(bert_model_name).to(self.device)
+        self.pre = nlp_entry.QuestionPreprocessor(remove_stopwords=True)
+        self.tokenizer = scibox_api.SciBoxClient(api_key="sk-QFTyxx7PZeJjc5cBhWygoQ")
 
         # 2. Загрузка обученных моделей CatBoost
         self.catboost_models = {}
@@ -67,23 +70,29 @@ class FAQCatBoostInference:
         self.id_to_label_maps = id_to_label_maps
 
     def _get_embedding(self, text):
-        """
-        Внутренний метод для получения эмбеддинга одного текста.
-        """
-        inputs = self.tokenizer(
-            text,
-            return_tensors='pt',
-            padding=True,
-            truncation=True,
-            max_length=512
-        ).to(self.device)
-
-        with torch.no_grad():
-            outputs = self.bert_model(**inputs)
-
-        # Используем эмбеддинг [CLS] токена
-        cls_embedding = outputs.last_hidden_state[:, 0, :].cpu().numpy()
-        return cls_embedding
+        processed = self.pre.preprocess(text)["normalized"]
+        resp = self.tokenizer.embeddings(
+            inputs=processed
+        )
+        return resp.data[0].embedding
+    # def _get_embedding(self, text):
+    #     """
+    #     Внутренний метод для получения эмбеддинга одного текста.
+    #     """
+    #     inputs = self.tokenizer(
+    #         text,
+    #         return_tensors='pt',
+    #         padding=True,
+    #         truncation=True,
+    #         max_length=512
+    #     ).to(self.device)
+    #
+    #     with torch.no_grad():
+    #         outputs = self.bert_model(**inputs)
+    #
+    #     # Используем эмбеддинг [CLS] токена
+    #     cls_embedding = outputs.last_hidden_state[:, 0, :].cpu().numpy()
+    #     return cls_embedding
 
     def predict(self, text):
         """
@@ -102,12 +111,12 @@ class FAQCatBoostInference:
         # 2. Делаем предсказания для каждой категории
         for category, model in self.catboost_models.items():
             # CatBoost предсказывает индекс класса
-            predicted_id = model.predict(embedding)[0]
+            predicted_id = model.predict(embedding)
 
             # 3. Декодируем индекс в текстовую метку
             predicted_label = self.id_to_label_maps[category].get(int(predicted_id), "Неизвестный класс")
             predictions[category] = predicted_label
-
+        predictions["embedding"] = embedding
         return predictions
 
 class FAQInference:
