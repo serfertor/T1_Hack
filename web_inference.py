@@ -61,6 +61,10 @@ class MainApplication:
         predictions = self.inference.predict(question)
         return predictions
 
+    def get_answer_completion(self, question, answer_example):
+        predictions = self.inference.complete(question, answer_example)
+        return predictions
+
 
 application = MainApplication()
 
@@ -71,13 +75,26 @@ def get_hint_wrapper(kwargs):
         return {"error": "error while getting hint"}, 500
     return result, 200
 
+def answer_completion_wrapper(kwargs):
+    result_raw = application.get_answer_completion(kwargs.get("question"), kwargs.get("answer_example"))
+    result = {"completed_answer": result_raw}
+    if not result:
+        return {"error": "error while getting hint"}, 500
+    return result, 200
 
-
+@app.route('/request_answer_completion', methods=['POST'])
+def request_answer_completion():
+    answer_example = request.json.get("answer_example")
+    question = request.json.get("question")
+    task = Task("request_answer_completion", answer_completion_wrapper, {
+                                                              "answer_example": answer_example, "question" :question})
+    application.add_task(task)
+    return jsonify({"task_id": task.task_id}), 200
 
 @app.route('/request_hint', methods=['POST'])
 def request_hint():
     question = request.json.get("question")
-    task = Task("index_in_db", get_hint_wrapper, {
+    task = Task("request_hint", get_hint_wrapper, {
                                                               "question": question})
     application.add_task(task)
     return jsonify({"task_id": task.task_id}), 200
