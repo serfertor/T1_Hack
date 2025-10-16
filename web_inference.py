@@ -77,9 +77,9 @@ def get_hint_wrapper(kwargs):
 
 def answer_completion_wrapper(kwargs):
     result_raw = application.get_answer_completion(kwargs.get("question"), kwargs.get("answer_example"))
+    if not result_raw:
+        return {"error": "error while getting answer_completion"}, 500
     result = {"completed_answer": result_raw}
-    if not result:
-        return {"error": "error while getting hint"}, 500
     return result, 200
 
 @app.route('/request_answer_completion', methods=['POST'])
